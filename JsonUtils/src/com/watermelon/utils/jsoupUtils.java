@@ -110,6 +110,9 @@ public class jsoupUtils {
 		}
 		return null;
 	}
+	
+	
+	
 
 	public static void main(String[] args) {
 		String html = getHTML("http://www.qq.com/", "gbk");
