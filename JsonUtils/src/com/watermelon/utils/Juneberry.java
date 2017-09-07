@@ -38,6 +38,9 @@ import org.apache.http.impl.conn.PoolingClientConnectionManager;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
 import com.google.gson.JsonNull;
 
@@ -50,30 +53,133 @@ public class Juneberry {
 		cookieStore = new BasicCookieStore();
 		httpClient = HttpClients.custom().setDefaultCookieStore(cookieStore).build();
 		proxy = new HttpHost("127.0.0.1", 8888, "http");
-		config = RequestConfig.custom().setProxy(proxy).build();
+		// config = RequestConfig.custom().setProxy(proxy).build();
 	}
 
-	private static String txt_LoginID = "201467003003";
-	private static String txt_Password = "201467003003";
+	private static String txt_LoginID = "201467003007";
+	private static String txt_Password = "201467003007";
 	private static String LoginUrl = "http://zwfp.jxnu.jadl.net/Login.aspx";// 登录url
 	private static String __VIEWSTATE = "";
 	private static String __VIEWSTATEGENERATOR = "";
 	private static String __EVENTVALIDATION = "";
 	private static String subCmd = "";
+	private static String roomName[] = { "自习室101(南)", "自习室201(南)", "自习室202(北)", "自习室301(南)", "自习室302(北)" };
 
 	public static void main(String[] args) throws Exception {
-	
-	    
-	}
-	
-	public static void getTestUser() throws Exception
-	{
-
-		getTestUserAccount();
-		//testCancel();
+		// getTestUserAccount();
+		// testGetSeat();
+		testCancelAndGetSeat();
+		// testCancel();
 
 	}
 
+	public static void testCancelAndGetSeat() throws Exception {
+		// 登录
+		String loginResult = login(txt_LoginID, txt_Password);
+		String h1 = null;
+		try {
+			h1 = jsoupUtils.getHTMLByTagFirst(loginResult, "h2");
+		} catch (Exception e) {
+			System.out.println(txt_LoginID + "已经修改密码");
+			return;
+		}
+		System.out.println("登陆成功");
+		// 取消现在的座位
+		String logs = queryLogs();
+		String li = null;
+		try {
+			li = jsoupUtils.getHTMLByTagSeconds(logs, "ul");// 预约记录li
+
+		} catch (Exception e) {
+			System.out.println("无预约记录");
+			return;
+		}
+		Document document = Jsoup.parse(li);
+		Elements elements = document.getElementsByTag("li");
+		li = elements.get(1).outerHtml();
+
+		//System.out.println(li);
+		String name = jsoupUtils.getRoomName(li);
+		Integer roomId = jsoupUtils.getRoomId(name, roomName);
+		//System.out.println(roomId);
+		String key = jsoupUtils.getKey(li);// 查询要取消的key
+		if (key == null) {
+			System.out.println("没有预约位置");
+			return;
+		}
+
+		String cancelResult = cancel(key);
+		// System.out.println(cancelResult);
+		// System.out.println("--------------------------------------");
+		try {
+			String cancelSuccess = jsoupUtils.getCancelSuccess(cancelResult);
+			//System.out.println(cancelSuccess);
+		} catch (Exception e) {
+			System.out.println("取消失败");
+		}
+
+		System.out.println("取消成功");
+
+		// 查询现在的座位
+		String getSeatResult = getSeat(selReadingRooms[roomId]);
+		// System.out.println(getSeatResult);
+
+		document = Jsoup.parse(getSeatResult);// 将html解析成document对象
+		elements = document.getElementsByTag("span");
+		if (elements.size() >= 1) {
+			System.out.println(name + "无位置");
+			return;
+		}
+
+		System.out.println("有位置");
+		// 获取table
+		String[] seatsArray = jsoupUtils.getSeat(getSeatResult);
+        
+		if (seatsArray == null||seatsArray.length==0) {
+			System.out.println("位置被抢光啦");
+		}
+		String seats=jsoupUtils.getSeat(seatsArray);
+		System.out.println(seats);
+		String bookResult = bookSeat(seats, selReadingRooms[roomId]);
+		System.out.println("_______________________");
+		//System.out.println(bookResult);
+		
+		document=Jsoup.parse(bookResult);
+		Element ele=document.getElementById("MessageTip");
+		if(ele.text().equals("座位预约成功，请在6:00至10:00到图书馆刷卡确认"))
+		{
+			System.out.println("恭喜你，座位预定成功。");
+			System.out.println("座位号："+seats);
+		}
+
+	}
+
+	public static void testGetSeat() throws Exception {
+		String loginResult = login(txt_LoginID, txt_Password);
+		String h1 = null;
+		try {
+			h1 = jsoupUtils.getHTMLByTagFirst(loginResult, "h2");
+		} catch (Exception e) {
+			System.out.println(txt_LoginID + "已经修改密码");
+			return;
+		}
+		System.out.println("登陆成功");
+		String getSeatResult = getSeat(selReadingRooms[0]);
+		System.out.println(getSeatResult);
+		String noSeat = jsoupUtils.getHTMLByTagFirst(getSeatResult, "span");
+		System.out.println(noSeat);
+		if (noSeat != null) {
+			System.out.println("今天没位置了");
+			return;
+		}
+
+	}
+
+	/**
+	 * 测试取消功能
+	 * 
+	 * @throws Exception
+	 */
 	public static void testCancel() throws Exception {
 		String loginResult = login(txt_LoginID, txt_Password);
 		String h1 = null;
@@ -101,16 +207,13 @@ public class Juneberry {
 
 		String cancelResult = cancel(key);
 		System.out.println(cancelResult);
-		try{
-			String cancelSuccess=jsoupUtils.getHTMLByTagSeconds(cancelResult, "script");
-		}catch (Exception e) {
+		try {
+			String cancelSuccess = jsoupUtils.getHTMLByTagSeconds(cancelResult, "script");
+		} catch (Exception e) {
 			System.out.println("取消失败");
 		}
 		System.out.println("取消成功");
-		
-		
-		
-		
+
 	}
 
 	public static void getTestUserAccount() throws Exception {
@@ -178,7 +281,7 @@ public class Juneberry {
 	public static String cancel(String key) {
 		__VIEWSTATE = "/wEPDwUKMTY3NjM4MDk3NA9kFgICAw9kFgoCAg8WAh4FY2xhc3MFDXVpLWJ0bi1hY3RpdmVkAgMPFgIfAGVkAgQPFgIfAGVkAgYPEGQPFgUCAQICAgMCBAIFFgUQBRHoh6rkuaDlrqQxMDEo5Y2XKQUGMTAxMDAxZxAFEeiHquS5oOWupDIwMSjljZcpBQYxMDEwMDJnEAUR6Ieq5Lmg5a6kMjAyKOWMlykFBjEwMTAwM2cQBRHoh6rkuaDlrqQzMDEo5Y2XKQUGMTAxMDA0ZxAFEeiHquS5oOWupDMwMijljJcpBQYxMDEwMDVnZGQCBw8WAh4HVmlzaWJsZWhkZGD9eBr/IadjWW0IL4y1WR4FBrSGh5D1gj6lVVxCVu3S";
 		__VIEWSTATEGENERATOR = "47429C9F";
-		__EVENTVALIDATION = "/wEWBQLR1aHCDQLgu8z3BgKk%2B56eBwLMgJnOCQLytq6nD9ftacDfHnbBjjMcjqehy%2B7ugquD4S9TTZp4BnSM6jML";
+		__EVENTVALIDATION = "/wEWBQLR1aHCDQLgu8z3BgKk+56eBwLMgJnOCQLytq6nD9ftacDfHnbBjjMcjqehy+7ugquD4S9TTZp4BnSM6jML";
 		chooseDate = "选择日期";
 		ddlDate = "7";
 		ddlRoom = "-1";
@@ -227,7 +330,7 @@ public class Juneberry {
 		headers.put("Cache-Control", CacheControl);
 		headers.put("Origin", Origin);
 		headers.put("Referer", Referer);
-		String result = sendPost(params, queryLogsURL, headers);
+		String result = sendPost2(params, queryLogsURL, headers);
 		return result;
 	}
 
@@ -254,7 +357,7 @@ public class Juneberry {
 		try {
 
 			HttpPost post = new HttpPost(LoginUrl);
-			post.setEntity(new UrlEncodedFormEntity(params));
+			post.setEntity(new UrlEncodedFormEntity(params, "utf-8"));
 			httpResponse = httpClient.execute(post);
 			String result = EntityUtils.toString(httpResponse.getEntity());
 			return result;
@@ -280,6 +383,39 @@ public class Juneberry {
 	private static String Referer = "";
 	private static String UpgradeInsecureRequests = "1";
 	private static String UserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36";
+	private static String txtBookDate = "";
+	private static String selReadingRoom = "";
+
+	public static String getSeat2(String readingRoom) {
+		ContentLength = "593";
+		Referer = "http://zwfp.jxnu.jadl.net/BookSeat/BookSeatListForm.aspx";
+		__VIEWSTATE = "/wEPDwUKMTM5MDYwMzc1OA9kFgICAw9kFgYCBw8QZA8WBWYCAQICAgMCBBYFEAUR6Ieq5Lmg5a6kMTAxKOWNlykFBjEwMTAwMWcQBRHoh6rkuaDlrqQyMDEo5Y2XKQUGMTAxMDAyZxAFEeiHquS5oOWupDIwMijljJcpBQYxMDEwMDNnEAUR6Ieq5Lmg5a6kMzAxKOWNlykFBjEwMTAwNGcQBRHoh6rkuaDlrqQzMDIo5YyXKQUGMTAxMDA1Z2RkAgkPFgQeCWlubmVyaHRtbGUeB1Zpc2libGVoZAILDzwrAAkAZGTx+ukjUIPRsKDM56UDnVvXNZuCLN9TkcbAge3Mz7zTZQ==";
+		__VIEWSTATEGENERATOR = "871AA8B3";
+		__EVENTVALIDATION = "/wEWBQKt5JrACQKP25+PBwKozKffBwKe8pjrCQLbhOG0Aql5TSJ0nhtEutd/JRVIFbzcy0tbYY4shPyNbOh7kYaY";
+		hidBookDate = CommonUtils.getNextDate(new Date());
+		hidRrId = readingRoom;
+		subCmd = "query";
+		txtBookDate = hidBookDate;
+		selReadingRoom = readingRoom;
+
+		Map<String, String> headers = new HashMap<>();
+		headers.put("CacheControl", CacheControl);
+		headers.put("ContentLength", ContentLength);
+		headers.put("ContentType", ContentType);
+		headers.put("Origin", Origin);
+		headers.put("Referer", Referer);
+
+		Map<String, String> params = new HashMap<>();
+		params.put("__VIEWSTATE", __VIEWSTATE);
+		params.put("__VIEWSTATEGENERATOR", __VIEWSTATEGENERATOR);
+		params.put("__EVENTVALIDATION", __EVENTVALIDATION);
+		params.put("hidBookDate", hidBookDate);
+		params.put("hidRrId", hidRrId);
+		params.put("subCmd", subCmd);
+		params.put("txtBookDate", txtBookDate);
+		params.put("selReadingRoom", selReadingRoom);
+		return sendPost(params, getSeatUrl, headers);
+	}
 
 	/**
 	 * 获取某某教室座位
@@ -287,7 +423,7 @@ public class Juneberry {
 	 * @param room
 	 * @param cookies
 	 */
-	public static String getSeat(String room, List<Cookie> cookies) {
+	public static String getSeat1(String room) {
 		subCmd = "query";
 		__VIEWSTATE = "/wEPDwUKMTM5MDYwMzc1OA9kFgICAw9kFgYCBw8QZA8WBWYCAQICAgMCBBYFEAUR6Ieq5Lmg5a6kMTAxKOWNlykFBjEwMTAwMWcQBRHoh6rkuaDlrqQyMDEo5Y2XKQUGMTAxMDAyZxAFEeiHquS5oOWupDIwMijljJcpBQYxMDEwMDNnEAUR6Ieq5Lmg5a6kMzAxKOWNlykFBjEwMTAwNGcQBRHoh6rkuaDlrqQzMDIo5YyXKQUGMTAxMDA1Z2RkAgkPFgQeCWlubmVyaHRtbGUeB1Zpc2libGVoZAILDzwrAAkAZGTx+ukjUIPRsKDM56UDnVvXNZuCLN9TkcbAge3Mz7zTZQ==";
 		__VIEWSTATEGENERATOR = "871AA8B3";
@@ -309,16 +445,17 @@ public class Juneberry {
 
 		try {
 			HttpPost httpPost = new HttpPost(getSeatUrl);
+			httpPost.setConfig(config);
 			httpPost = addHeader(httpPost);// 加入默认header
-			String cookie = CommonUtils.getSessionId(cookies);
-			System.out.println(cookie);
+			// String cookie = CommonUtils.getSessionId(cookies);
+			// System.out.println(cookie);
 			// httpPost.addHeader("Cookie", cookie);
 			httpPost.addHeader("CacheControl", CacheControl);
 			httpPost.addHeader("ContentLength", ContentLength);
 			httpPost.addHeader("ContentType", ContentType);
 			httpPost.addHeader("Origin", Origin);
 			httpPost.addHeader("Referer", Referer);
-			httpPost.setEntity(new UrlEncodedFormEntity(params));
+			httpPost.setEntity(new UrlEncodedFormEntity(params, "utf-8"));
 			httpResponse = httpClient.execute(httpPost);
 			String result = EntityUtils.toString(httpResponse.getEntity());
 			System.out.println(result);
@@ -326,6 +463,38 @@ public class Juneberry {
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
+
+	}
+
+	public static String getSeat(String room) {
+		ContentLength = "593";
+		Referer = "http://zwfp.jxnu.jadl.net/BookSeat/BookSeatListForm.aspx";
+		__VIEWSTATE = "/wEPDwUKMTM5MDYwMzc1OA9kFgICAw9kFgYCBw8QZA8WBWYCAQICAgMCBBYFEAUR6Ieq5Lmg5a6kMTAxKOWNlykFBjEwMTAwMWcQBRHoh6rkuaDlrqQyMDEo5Y2XKQUGMTAxMDAyZxAFEeiHquS5oOWupDIwMijljJcpBQYxMDEwMDNnEAUR6Ieq5Lmg5a6kMzAxKOWNlykFBjEwMTAwNGcQBRHoh6rkuaDlrqQzMDIo5YyXKQUGMTAxMDA1Z2RkAgkPFgQeCWlubmVyaHRtbGUeB1Zpc2libGVoZAILDzwrAAkAZGTx+ukjUIPRsKDM56UDnVvXNZuCLN9TkcbAge3Mz7zTZQ==";
+		__VIEWSTATEGENERATOR = "871AA8B3";
+		__EVENTVALIDATION = "/wEWBQKt5JrACQKP25+PBwKozKffBwKe8pjrCQLbhOG0Aql5TSJ0nhtEutd/JRVIFbzcy0tbYY4shPyNbOh7kYaY";
+		hidBookDate = null;
+		hidRrId = null;
+		subCmd = "query";
+		txtBookDate = CommonUtils.getNextDate(new Date());
+		selReadingRoom = room;
+
+		Map<String, String> headers = new HashMap<>();
+		headers.put("CacheControl", CacheControl);
+		headers.put("ContentLength", ContentLength);
+		headers.put("ContentType", ContentType);
+		headers.put("Origin", Origin);
+		headers.put("Referer", Referer);
+
+		Map<String, String> params = new HashMap<>();
+		params.put("__VIEWSTATE", __VIEWSTATE);
+		params.put("__VIEWSTATEGENERATOR", __VIEWSTATEGENERATOR);
+		params.put("__EVENTVALIDATION", __EVENTVALIDATION);
+		params.put("hidBookDate", hidBookDate);
+		params.put("hidRrId", hidRrId);
+		params.put("subCmd", subCmd);
+		params.put("txtBookDate", txtBookDate);
+		params.put("selReadingRoom", selReadingRoom);
+		return sendPost(params, getSeatUrl, headers);
 
 	}
 
@@ -352,18 +521,60 @@ public class Juneberry {
 	 *            请求URL
 	 * @return
 	 */
-	public static String sendPost(Map<String, String> params, String url, Map<String, String> headers) {
+	public static String sendPost2(Map<String, String> params, String url, Map<String, String> headers) {
 
 		CloseableHttpResponse httpResponse = null;
 
 		HttpPost httpPost = new HttpPost(url);
+
 		httpPost.setConfig(config);
+
 		httpPost = addHeader(httpPost);// 加入默认Header
+
 		// 加入header
 		for (Entry<String, String> entry : headers.entrySet()) {
 			httpPost.addHeader(entry.getKey(), entry.getValue());
 		}
 		httpPost = setQueryParams(params, httpPost);
+
+		try {
+			httpResponse = httpClient.execute(httpPost);
+			String result = EntityUtils.toString(httpResponse.getEntity());
+			return result;
+		} catch (ClientProtocolException e) {
+			throw new RuntimeException(e);
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	/**
+	 * 发送post请求
+	 * 
+	 * @param queryParams
+	 *            查询参数
+	 * @param url
+	 *            请求URL
+	 * @return
+	 */
+	public static String sendPost(Map<String, String> params, String url, Map<String, String> headers) {
+
+		CloseableHttpResponse httpResponse = null;
+
+		HttpPost httpPost = new HttpPost(url);
+
+		httpPost.setConfig(config);
+
+		httpPost = addHeader(httpPost);// 加入默认Header
+		if (headers != null) {
+			// 加入header
+			for (Entry<String, String> entry : headers.entrySet()) {
+				httpPost.addHeader(entry.getKey(), entry.getValue());
+			}
+		}
+
+		httpPost = setQueryParams(params, httpPost);
+
 		try {
 			httpResponse = httpClient.execute(httpPost);
 			String result = EntityUtils.toString(httpResponse.getEntity());
@@ -448,21 +659,44 @@ public class Juneberry {
 	 * @param post
 	 * @return
 	 */
-	public static HttpPost setQueryParams(Map<String, String> params, HttpPost post) {
+	public static HttpPost setQueryParams2(Map<String, String> params, HttpPost post) {
 		StringBuilder sb = new StringBuilder();
 		for (Entry entry : params.entrySet()) {
-			//System.out.println(entry.getKey());
+			// System.out.println(entry.getKey());
 			sb.append(entry.getKey());
-			//System.out.println("=");
+			// System.out.println("=");
 			sb.append("=");
-			//System.out.println(entry.getValue());
+			// System.out.println(entry.getValue());
 			sb.append(entry.getValue());
 			sb.append("&");
 		}
 		String str = sb.toString();
-		//System.out.println(str);
+		System.out.println(str);
 		try {
 			post.setEntity(new StringEntity(str, "utf-8"));
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+
+		return post;
+	}
+
+	/**
+	 * 设置post的查询参数
+	 * 
+	 * @param params
+	 * @param post
+	 * @return
+	 */
+	public static HttpPost setQueryParams(Map<String, String> params, HttpPost post) {
+		List<NameValuePair> params1 = new ArrayList<>();
+		for (Entry entry : params.entrySet()) {
+			String name = (String) entry.getKey();
+			String value = (String) entry.getValue();
+			params1.add(new BasicNameValuePair(name, value));
+		}
+		try {
+			post.setEntity(new UrlEncodedFormEntity(params1, "utf-8"));
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
@@ -480,6 +714,55 @@ public class Juneberry {
 		httpPost.addHeader("Upgrade-Insecure-Requests", UpgradeInsecureRequests);
 		httpPost.addHeader("User-Agent", UserAgent);
 		return httpPost;
+	}
+
+	/**
+	 * 预定座位,测试通过
+	 * 
+	 * @param seatShortNo
+	 *            A18
+	 * @param roomNo
+	 *            101001
+	 * @return
+	 */
+	public static String bookSeat(String seatShortNo, String roomNo) {
+		// QueryData
+		String seatNo =  roomNo+seatShortNo;
+		String date = CommonUtils.getNextDate(new Date());
+		String timeSpan = "";
+
+		// FormData
+		__VIEWSTATE = "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";
+		__VIEWSTATEGENERATOR = "7629D439";
+		__EVENTVALIDATION = "/wEWAwL55vP0CgL0ntKNAwLCi9reA0yaRpkdgpS8+9pWCS+9JOUpucy4wjhzcv9qx7/TWLH3";
+		subCmd = "query";
+		String spanSelect = "7:00";
+
+		// String
+		// URL="http://zwfp.jxnu.jadl.net/BookSeat/BookSeatMessage.aspx?seatNo=101001A18&seatShortNo=A18&roomNo=101001&date=2017-9-8&timeSpan=";
+		      //http://zwfp.jxnu.jadl.net/BookSeat/BookSeatMessage.aspx?seatNo=A18 L05101001&seatShortNo=A18 L05&roomNo=101001&date=2017-9-8&timeSpan=
+		StringBuilder sb = new StringBuilder();
+		sb.append("http://zwfp.jxnu.jadl.net/BookSeat/BookSeatMessage.aspx?");
+		sb.append("seatNo=");
+		sb.append(seatNo);
+		sb.append("&seatShortNo=");
+		sb.append(seatShortNo);
+		sb.append("&roomNo=");
+		sb.append(roomNo);
+		sb.append("&date=");
+		sb.append(date);
+		sb.append("&timeSpan=");
+
+		String URL = sb.toString();
+       // System.out.println(URL);
+		Map<String, String> params = new HashMap<>();
+		params.put("__VIEWSTATE", __VIEWSTATE);
+		params.put("__VIEWSTATEGENERATOR", __VIEWSTATEGENERATOR);
+		params.put("__EVENTVALIDATION", __EVENTVALIDATION);
+		params.put("subCmd", subCmd);
+		params.put("spanSelect", spanSelect);
+		return sendPost(params, URL, null);
+
 	}
 
 }

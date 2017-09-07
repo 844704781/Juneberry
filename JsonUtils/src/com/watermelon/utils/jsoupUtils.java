@@ -9,6 +9,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.Charset;
+import java.util.Random;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -88,18 +89,29 @@ public class jsoupUtils {
 
 	}
 
-	public static Elements getHTMLByTag(String html, String className)throws Exception {
-		
+	public static Elements getHTMLByTag(String html, String className) throws Exception {
+
 		Document document = Jsoup.parse(html);// 将html解析成document对象
 		Elements elements = document.getElementsByTag(className);
 		return elements;
 	}
 
-	public static String getHTMLByTagSeconds(String html, String className)throws Exception {
-		return getHTMLByTag(html, className).get(1).html();
+	public static String getHTMLByTagSeconds(String html, String className) throws Exception {
+		Document document = Jsoup.parse(html);// 将html解析成document对象
+		Elements elements = document.getElementsByTag(className);
+		if (elements == null) {
+			return null;
+		}
+		return elements.get(1).html();
 	}
 
-	public static String getKey(String html)throws Exception {
+	public static String getCancelSuccess(String html) {
+		Document document = Jsoup.parse(html);// 将html解析成document对象
+		Elements elements = document.getElementsByTag("script");
+		return elements.get(3).html();
+	}
+
+	public static String getKey(String html) throws Exception {
 		Elements elements = getHTMLByTag(html, "li");
 		for (int i = 0; i < elements.size(); i++) {
 			if ("预约状态：等待确认".equals(elements.get(i).html())) {
@@ -110,12 +122,85 @@ public class jsoupUtils {
 		}
 		return null;
 	}
-	
-	
-	
 
+	/**
+	 * <li data-theme="d" data-role="list-divider" role="heading">预约记录</li>
+	 * <li date-theme="d">自习室101(南)：A18
+	 * <ul date-theme="d">
+	 * <li>预约时间：2017-9-8 7:00:00</li>
+	 * <li>提交时间：2017-9-7 0:18:17</li>
+	 * <li>取消时间：1900-1-1 0:00:00</li>
+	 * <li>预约状态：等待确认</li>
+	 * <li><input data-inline="true" data-mini="false" value="取消" type="button"
+	 * onclick="subCancel('291053')"></li>
+	 * </ul>
+	 * </li>
+	 * 
+	 * 
+	 * @param args
+	 */
 	public static void main(String[] args) {
-		String html = getHTML("http://www.qq.com/", "gbk");
-		System.out.println(getATagsTextByClass(html, "newsContent"));
+		String getSeatResult = "<table id=\"DataListBookSeat\" cellspacing=\"0\" class=\"dlClass\" border=\"0\" style=\"width:100%;border-collapse:collapse;\">\n"
+				+ "	<tr>\n" + "		<td>\n"
+				+ "                    <div id=\"DataListBookSeat_ctl00_divItem\" data-role=\"fieldcontain\" style=\"width: 25%; height: 30px;\n"
+				+ "                        margin-left: 0; margin-top: 0\">\n"
+				+ "                        <div onclick='ShowBookMessage(&quot;101001A18&quot;,&quot;A18&quot;,&quot;&quot;)'\n"
+				+ "                            data-inline=\"true\" data-transition=\"none\" data-role=\"button\" style=\"width: 69px;\n"
+				+ "                            text-align: center; margin-left: 0; margin-top: 0\">\n"
+				+ "                            A18\n" + "                        </div>\n"
+				+ "                    </div>\n" + "                </td><td></td><td></td><td></td>\n" + "	</tr>\n"
+				+ "</table>";
+		
+		Document document=Jsoup.parse(getSeatResult);
+        Element tables=document.getElementById("DataListBookSeat");
+        System.out.print(tables.text()+"|");
+	}
+	
+	/**
+	 * 获得所有的位置
+	 * @param table
+	 * @return
+	 */
+	public static String[] getSeat(String table)
+	{
+		Document document=Jsoup.parse(table);
+        Element tables=document.getElementById("DataListBookSeat");
+        return tables.text().trim().split("\\s");
+	}
+	/**
+	 * 从位置数组中随机获得一个位置
+	 * @param seats
+	 * @return
+	 */
+	public static String getSeat(String []seats)
+	{
+		Random random=new Random();
+		int randomInt=random.nextInt(seats.length);
+		return seats[randomInt];
+	}
+
+	public static String getRoomName(String html) {
+		Document document = Jsoup.parse(html);
+		Elements elements = document.getElementsByTag("li");
+		String num1[] = null;
+		for (int i = 0; i < elements.size(); i++) {
+			if (elements.get(i).hasAttr("date-theme"))
+				;
+			{
+				num1 = elements.get(i).text().split("\\s");
+				break;
+
+			}
+		}
+		return num1[0].split("：")[0];
+	}
+
+	public static Integer getRoomId(String roomName, String roomNames[]) {
+		for (int i = 0; i < roomNames.length; i++) {
+			if (roomName.equals(roomNames[i])) {
+				return i;
+			}
+		}
+		return null;
 	}
 }
