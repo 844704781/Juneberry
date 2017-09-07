@@ -61,6 +61,12 @@ public class Juneberry {
 	private static String subCmd = "";
 
 	public static void main(String[] args) throws Exception {
+	
+	    
+	}
+	
+	public static void getTestUser() throws Exception
+	{
 
 		for (int i = 1; i < 70; i++) {
 			if (i < 10) {
@@ -115,9 +121,8 @@ public class Juneberry {
 		// 取消预约
 		// String cancelResult=cancel(key);
 		// System.out.println(cancelResult);
+
 	}
-	
-	
 	
 
 	/**
